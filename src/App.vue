@@ -1,73 +1,69 @@
 <script setup>
-import { ref, watch, nextTick } from 'vue'
-import MsgComp from './components/MsgComp.vue'
+import { ref, unref } from 'vue'
 import GroupList from './components/GroupList.vue'
 import ConnectionTips from './components/ConnectionTips.vue'
 import CurrentConnection from './components/CurrentConnection.vue'
 import FileConfirm from './components/FileConfirm.vue'
+import MsgScreen from './components/MsgScreen.vue'
+import { storeToRefs } from 'pinia'
+import { useStore } from '/@/store/global.js'
 
-  let wsInstance = null
-  let connection = null
-  let dataChannel = null
-  let sctp = null
+  // store
+  const store = useStore()
+  const { wsInstance, connection, dataChannel, sctp, fileList } = storeToRefs(store)
+  const { createWsInstance, createConnection, createChannel, getConnectionSCTP, sendMsg } = store
+  console.log(store)
 
   const groupListRef = ref()
-  const wrapperRef = ref()
-  const screenRef = ref()
+  const msgScreenRef = ref()
   const fileReceiverRef = ref()
 
-  const msg = ref('')
-  const msgList = ref([])
   const wsConnectBtnStatus = ref(false)
 
-  const fileEle = ref()
   const fileReceiver = ref({})
   let receiver = {
     chunk: [],
     offset: 0
-  }
-  let fileList = []
-
-  // receiver文件确认
-  const handleConfirmClose = (accept) => {
-    wsInstance.send(JSON.stringify({
-      type: 'file-receiver',
-      data: accept
-    }))
+  
   }
 
-  const onFileChange = (e) => {
-    fileList = e.target.files
-  }
-
+  // 关闭弹窗
   window.addEventListener('beforeunload', () => {
-    if (wsInstance && wsInstance.readyState === 1) {
-      wsInstance.close(1000)
+    if (unref(wsInstance) && unref(wsInstance).readyState === 1) {
+      unref(wsInstance).close(1000)
     }
   })
 
-  // 发送文件 发送小文件
+  // receiver文件确认
+  const handleConfirmClose = (accept) => {
+    sendMsg({
+      type: 'file-receiver',
+      data: accept
+    })
+  }
+
+  // 发送文件
   const sendFile = async () => {
     let offset = 0
     let percent = 0
-    const chunkSize = sctp.maxMessageSize;
-    const file = fileList[0]
+    const chunkSize = unref(sctp).maxMessageSize;
+    const file = unref(fileList)[0]
 
     while(offset < file.size) {
       const chunk = file.slice(offset, offset + chunkSize)
       const buffer = await chunk.arrayBuffer()
 
-      dataChannel.send(buffer)
+      unref(dataChannel).send(buffer)
 
       // bufferedAmount 16777216 = 16GB 临界值
       // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmount
       // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedamountlow_event
       // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmountLowThreshold
 
-      if (dataChannel.bufferedAmount > sctp.maxMessageSize * 2) {
+      if (unref(dataChannel).bufferedAmount > unref(sctp).maxMessageSize * 2) {
         // 等待缓存队列降到阈值之下 预设buffer
         await new Promise(resolve => {
-          dataChannel.onbufferedamountlow = (ev) => {
+          unref(dataChannel).onbufferedamountlow = (ev) => {
             resolve(0);
           }
         });
@@ -83,34 +79,6 @@ import FileConfirm from './components/FileConfirm.vue'
     // dataChannel.send(buffer)
   }
 
-  // 发送文件前 发送文件确认
-  const sendFileConfirm = () => {
-    const file = fileList[0]
-
-    wsInstance.send(JSON.stringify({
-      type: 'file-sender',
-      data: {
-        id: '',
-        name: file.name,
-        size: file.size,
-        type: file.type
-      }
-    }))
-  }
-
-  watch(
-    msgList,
-    () => {
-      nextTick(() => {
-        let height = wrapperRef.value.offsetHeight
-        screenRef.value.scrollTo({
-          top: height,
-          behavior: "smooth"
-        })
-      })
-    }
-  )
-
   // ws信道服务转发处理
   const handleWsMsg = async (e) => {
     const { type, data } = JSON.parse(e.data)
@@ -123,7 +91,7 @@ import FileConfirm from './components/FileConfirm.vue'
         await receiveAnswer(data)
         break;
       case 'system':
-        msgList.value.push({ type, data })
+        msgScreenRef.value.msgList.push({ type, data })
         groupListRef.value.getGroupList()
         break;
       case 'connect':
@@ -163,26 +131,27 @@ import FileConfirm from './components/FileConfirm.vue'
 
   // 发送web-rtc连接请求
   const sendConnectionReq = (target) => {
-    if (!wsInstance) {
-      wsInstance.send(JSON.stringify({
+    console.log(unref(wsInstance))
+    if (unref(wsInstance)) {
+      sendMsg({
         type: 'connect',
         data: target
-      }))
+      })
     }
   }
 
   // 拒绝连接请求
   const handleChannelDenied = () => {
-    wsInstance.send(JSON.stringify({
+    sendMsg({
       type: 'denied'
-    }))
+    })
   }
 
   // 同意链接请求
   const handleChannelAccept = () => {
-    wsInstance.send(JSON.stringify({
+    sendMsg({
       type: 'accept'
-    }))
+    })
 
     // 接收方初始化连接
     receive()
@@ -195,7 +164,7 @@ import FileConfirm from './components/FileConfirm.vue'
     CurrentConnectionRef.value.show()
 
     // sctp
-    sctp = connection.sctp
+    getConnectionSCTP()
   }
 
   // 信道关闭回调
@@ -206,7 +175,7 @@ import FileConfirm from './components/FileConfirm.vue'
   // 主动关闭信道
   const onChannelClose = () => {
     console.log('手动关闭信道')
-    dataChannel.close()
+    unref(dataChannel).close()
   }
 
   // 合并buffer
@@ -235,7 +204,7 @@ import FileConfirm from './components/FileConfirm.vue'
     console.log('收到消息')
 
     if(typeof e.data === 'string') {
-      msgList.value.push({
+      msgScreenRef.value.msgList.value.push({
         type: 'text',
         data: {
           self: false,
@@ -263,29 +232,28 @@ import FileConfirm from './components/FileConfirm.vue'
     } 
   }
 
-  // 发起信道创建
+  // 发起方信道创建
   const create = () => {
-    connection = new RTCPeerConnection()
-
-    dataChannel = connection.createDataChannel('arthur',{ negotiated: true, id: 117 })
+    createConnection()
+    createChannel('arthur',{ negotiated: true, id: 117 })
     console.log('发起方创建信道')
 
-    dataChannel.onmessage = handleChannelMessage
-    dataChannel.onopen = handleChannelOpen
-    dataChannel.onclose = handleChannelClose
+    unref(dataChannel).onmessage = handleChannelMessage
+    unref(dataChannel).onopen = handleChannelOpen
+    unref(dataChannel).onclose = handleChannelClose
 
     createOffer()
   }
 
   // 接收方信道创建
   const receive = () => {
-    connection = new RTCPeerConnection()
-    dataChannel = connection.createDataChannel('arthur',{ negotiated: true, id: 117 })
+    createConnection()
+    createChannel('arthur', { negotiated: true, id: 117 })
     console.log('接收方创建信道')
 
-    dataChannel.onmessage = handleChannelMessage
-    dataChannel.onopen = handleChannelOpen
-    dataChannel.onclose = handleChannelClose
+    unref(dataChannel).onmessage = handleChannelMessage
+    unref(dataChannel).onopen = handleChannelOpen
+    unref(dataChannel).onclose = handleChannelClose
 
     // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/sctp
     // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/negotiated
@@ -298,27 +266,6 @@ import FileConfirm from './components/FileConfirm.vue'
     //   dataChannel.onopen = handleChannelOpen
     //   dataChannel.onclose = handleChannelClose
     // }
-  }
-
-  // 发送信道消息
-  const send = () => {
-    const message = msg.value
-
-    if (!message) return 
-    // 发送消息
-    dataChannel.send(message)
-
-    // push当前消息
-    msgList.value.push({
-      type: 'text',
-      data: {
-        self: true,
-        msg: message
-      }
-    })
-
-    // 清除输入框
-    msg.value = ''
   }
 
   // 链接ws
@@ -343,66 +290,70 @@ import FileConfirm from './components/FileConfirm.vue'
     const response = await res.json()
 
     if (response.code === 0) {
-      wsInstance = new WebSocket('ws://127.0.0.1:8010')
-      wsInstance.onmessage = handleWsMsg
-      wsInstance.onopen = handleWsOpen
+      createWsInstance()
+
+      unref(wsInstance).onmessage = handleWsMsg
+      unref(wsInstance).onopen = handleWsOpen
     }
   }
 
+  // 发起方创建offer
   const createOffer = async() => {
-    const offer = await connection.createOffer()
+    const offer = await unref(connection).createOffer()
     console.log('发起方 创建offer')
-    await connection.setLocalDescription(offer)
+    await unref(connection).setLocalDescription(offer)
     console.log('发起方 将自创建的offer设置为本地描述')
 
     // ICE候选人的本地描述发生改变触发
     // https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/icecandidate_event
-    connection.onicecandidate = async (event) => {
+    unref(connection).onicecandidate = async (event) => {
       if (event.candidate) {
-        const offerSdp = connection.localDescription
+        const offerSdp = unref(connection).localDescription
         console.log('发起方 在设置完自己的本地描述后 将其发送给信令服务器')
 
         // 发送 offer
         if (offerSdp) {
-          wsInstance.send(JSON.stringify({
+          sendMsg({
             type: 'offer',
             data: offerSdp
-          }))
+          })
         }
       }
     }
   }
 
+  // 接收方创建answer
   const createAnswer = async (offer) => {
-      connection.onicecandidate = async (event) => {
+    unref(connection).onicecandidate = async (event) => {
 
       // 当一个新的 answer ICE candidate 被创建时
       if (event.candidate) {
         console.log('接收方 在设置完自己的本地描述后 将其发送给信令服务器')
-        wsInstance.send(JSON.stringify({
+        sendMsg({
           type: 'answer',
-          data: connection.localDescription
-        }))
+          data: unref(connection).localDescription
+        })
       }
     }
 
     try {
-      await connection.setRemoteDescription(offer)
+      await unref(connection).setRemoteDescription(offer)
       console.log('接收方 将从信令服务器获取到的发起方的本地描述 设置成自己的远端描述')
-      const answer = await connection.createAnswer()
+      const answer = await unref(connection).createAnswer()
       console.log('接收方 创建一个应答')
-      await connection.setLocalDescription(answer)
+      await unref(connection).setLocalDescription(answer)
       console.log('接收方 将自创建的应答设置为自己的本地描述')
     } catch (error) {
       console.log(error)
     }
   }
 
+  // 发送方收到接收方的answer
   const receiveAnswer = async(answer) => {
     console.log('发起方 从信令服务器获取接收方的本地描述后 将其设置为自己的远程描述')
     // 添加 answer(应答)
-    if (!connection.currentRemoteDescription) {
-      await connection.setRemoteDescription(answer)
+    if (!unref(connection).currentRemoteDescription) {
+      await unref(connection).setRemoteDescription(answer)
     }
   }
 </script>
@@ -428,27 +379,13 @@ import FileConfirm from './components/FileConfirm.vue'
       ref="fileReceiverRef"
       @close="handleConfirmClose"
     />
-    <div class="message">
-      <div ref="screenRef" class="message-container">
-        <div ref="wrapperRef" class="message-wrapper">
-          <MsgComp
-            v-for="(msg, index) in msgList"
-            :msg="msg"
-            :key="index"
-          />
-        </div>
-      </div>
-      <div class="operation">
-        <textarea class="text-input" id="story" name="story" rows="5" v-model="msg" @keyup.enter="send"></textarea>
-        <button class="send-btn" @click="send">send</button>
-      </div>
-    </div>
 
+    <MsgScreen
+      ref="msgScreenRef"
+    />
   </div>
 
   <button @click="connect" :disabled="wsConnectBtnStatus">connection</button>
-  <input type="file" ref="fileEle" @change="onFileChange">
-  <button @click="sendFileConfirm">send file</button>
 
 </template>
 
@@ -460,59 +397,5 @@ import FileConfirm from './components/FileConfirm.vue'
   display: flex;
   overflow: hidden;
   position: relative;
-
-  .message {
-    flex: auto;
-    display: flex;
-    flex-direction: column;
-    .message-container {
-      flex: auto;
-      box-sizing: border-box;
-      width: 100%;
-      height: 584px;
-      overflow: auto;
-      &::-webkit-scrollbar-track-piece {
-        background: #d3dce6;
-      }
-
-      &::-webkit-scrollbar {
-        width: 0px;
-        height: 6px;
-      }
-
-      &::-webkit-scrollbar-thumb {
-        background: #99a9bf;
-        border-radius: 20px;
-      }
-    }
-    .operation {
-      border-top: 1px solid #ccc;
-      box-sizing: border-box;
-      flex: none;
-      width: 100%;
-      padding: 2px 4px;
-      .text-input {
-        box-sizing: border-box;
-        width: 100%;
-        padding: 2px 8px;
-        border: 1px solid #ccc;
-        outline: #aaa;
-        &:focus {
-          border-color: #aaa;
-        }
-        &:focus-visible {
-          border-color: #aaa;
-        }
-      }
-      .send-btn {
-        display: block;
-        margin-left: auto;
-        color: #fff;
-        background-color: green;
-        border-radius: 4px;
-        font-size: 12px;
-      }
-    }
-  }
 } 
 </style>
