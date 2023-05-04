@@ -18,6 +18,7 @@ import FileConfirm from './components/FileConfirm.vue'
 
   const msg = ref('')
   const msgList = ref([])
+  const wsConnectBtnStatus = ref(false)
 
   const fileEle = ref()
   const fileReceiver = ref({})
@@ -39,6 +40,12 @@ import FileConfirm from './components/FileConfirm.vue'
     fileList = e.target.files
   }
 
+  window.addEventListener('beforeunload', () => {
+    if (wsInstance && wsInstance.readyState === 1) {
+      wsInstance.close(1000)
+    }
+  })
+
   // 发送文件 发送小文件
   const sendFile = async () => {
     let offset = 0
@@ -56,7 +63,6 @@ import FileConfirm from './components/FileConfirm.vue'
       // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmount
       // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedamountlow_event
       // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmountLowThreshold
-      // console.log('bufferedAmountLowThreshold' + dataChannel.bufferedAmountLowThreshold)
 
       if (dataChannel.bufferedAmount > sctp.maxMessageSize * 2) {
         // 等待缓存队列降到阈值之下 预设buffer
@@ -69,7 +75,6 @@ import FileConfirm from './components/FileConfirm.vue'
 
       offset += buffer.byteLength
       percent = offset / file.size
-      console.log((percent * 100).toFixed(2) + '%')
     }
 
 
@@ -121,32 +126,28 @@ import FileConfirm from './components/FileConfirm.vue'
         msgList.value.push({ type, data })
         groupListRef.value.getGroupList()
         break;
-      case 'media':
-        console.log(`its a media channel req!`)
-        break;
       case 'connect':
         renderChannelReq(data)
         break;
       case 'accept':
         create()
-        console.log('connection create!')
+        console.log('接收方同意建立信道链接')
         break;
       case 'denied':
-        console.log('connection denied!')
-        console.log(connection)
-        console.log(dataChannel)
+        console.log('接收方拒绝建立信道链接')
         break;
       case 'file-sender':
-        console.log('file recived confirm!')
+        console.log('发起方发送文件传输请求')
         fileReceiver.value = data
         fileReceiverRef.value.show(data)
         break;
       case 'file-receiver':
-        console.log('file confirm response')
+        console.log('接收方发送文件传输请求应答')
         if(data) {
           sendFile()
+          console.log('接收方允许接收文件')
         } else {
-          console.log('denied accept file')
+          console.log('接收方拒绝接收文件')
         }
         break;
       default:
@@ -162,10 +163,12 @@ import FileConfirm from './components/FileConfirm.vue'
 
   // 发送web-rtc连接请求
   const sendConnectionReq = (target) => {
-    wsInstance.send(JSON.stringify({
-      type: 'connect',
-      data: target
-    }))
+    if (!wsInstance) {
+      wsInstance.send(JSON.stringify({
+        type: 'connect',
+        data: target
+      }))
+    }
   }
 
   // 拒绝连接请求
@@ -188,7 +191,7 @@ import FileConfirm from './components/FileConfirm.vue'
   const CurrentConnectionRef = ref()
   // 信道打开回调
   const handleChannelOpen = () => {
-    console.log('channel open')
+    console.log('信道开启')
     CurrentConnectionRef.value.show()
 
     // sctp
@@ -197,12 +200,12 @@ import FileConfirm from './components/FileConfirm.vue'
 
   // 信道关闭回调
   const handleChannelClose = () => {
-    console.log('channel close')
+    console.log('信道关闭')
   }
 
   // 主动关闭信道
   const onChannelClose = () => {
-    console.log('close channel by user')
+    console.log('手动关闭信道')
     dataChannel.close()
   }
 
@@ -229,7 +232,7 @@ import FileConfirm from './components/FileConfirm.vue'
 
   // 信道消息接受回调
   const handleChannelMessage = (e) => {
-    console.log('Message receive!')
+    console.log('收到消息')
 
     if(typeof e.data === 'string') {
       msgList.value.push({
@@ -265,7 +268,7 @@ import FileConfirm from './components/FileConfirm.vue'
     connection = new RTCPeerConnection()
 
     dataChannel = connection.createDataChannel('arthur',{ negotiated: true, id: 117 })
-    console.log('创建信道')
+    console.log('发起方创建信道')
 
     dataChannel.onmessage = handleChannelMessage
     dataChannel.onopen = handleChannelOpen
@@ -278,7 +281,7 @@ import FileConfirm from './components/FileConfirm.vue'
   const receive = () => {
     connection = new RTCPeerConnection()
     dataChannel = connection.createDataChannel('arthur',{ negotiated: true, id: 117 })
-    console.log('reciver channel create!')
+    console.log('接收方创建信道')
 
     dataChannel.onmessage = handleChannelMessage
     dataChannel.onopen = handleChannelOpen
@@ -320,7 +323,7 @@ import FileConfirm from './components/FileConfirm.vue'
 
   // 链接ws
   const handleWsOpen = () => {
-
+    wsConnectBtnStatus.value = true
   }
 
   // 发起ws验证
@@ -340,7 +343,6 @@ import FileConfirm from './components/FileConfirm.vue'
     const response = await res.json()
 
     if (response.code === 0) {
-      console.log(response)
       wsInstance = new WebSocket('ws://127.0.0.1:8010')
       wsInstance.onmessage = handleWsMsg
       wsInstance.onopen = handleWsOpen
@@ -349,16 +351,16 @@ import FileConfirm from './components/FileConfirm.vue'
 
   const createOffer = async() => {
     const offer = await connection.createOffer()
-    console.log('A 创建offer')
+    console.log('发起方 创建offer')
     await connection.setLocalDescription(offer)
-    console.log('A 将自创建的offer设置为本地描述')
+    console.log('发起方 将自创建的offer设置为本地描述')
 
     // ICE候选人的本地描述发生改变触发
     // https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/icecandidate_event
     connection.onicecandidate = async (event) => {
       if (event.candidate) {
         const offerSdp = connection.localDescription
-        console.log('A 在设置完自己的本地描述后 将其发送给服务端')
+        console.log('发起方 在设置完自己的本地描述后 将其发送给信令服务器')
 
         // 发送 offer
         if (offerSdp) {
@@ -373,12 +375,10 @@ import FileConfirm from './components/FileConfirm.vue'
 
   const createAnswer = async (offer) => {
       connection.onicecandidate = async (event) => {
-      console.log('emit')
-      console.log(event)
 
       // 当一个新的 answer ICE candidate 被创建时
       if (event.candidate) {
-        console.log('B 在设置完自己的本地描述后 将其发送给服务端')
+        console.log('接收方 在设置完自己的本地描述后 将其发送给信令服务器')
         wsInstance.send(JSON.stringify({
           type: 'answer',
           data: connection.localDescription
@@ -388,18 +388,18 @@ import FileConfirm from './components/FileConfirm.vue'
 
     try {
       await connection.setRemoteDescription(offer)
-      console.log('B 将从服务端获取到的A的本地描述 设置成B自己的远端描述')
+      console.log('接收方 将从信令服务器获取到的发起方的本地描述 设置成自己的远端描述')
       const answer = await connection.createAnswer()
-      console.log('B 创建一个应答')
+      console.log('接收方 创建一个应答')
       await connection.setLocalDescription(answer)
-      console.log('B 将自创建的应答设置为B自己的本地描述')
+      console.log('接收方 将自创建的应答设置为自己的本地描述')
     } catch (error) {
       console.log(error)
     }
   }
 
   const receiveAnswer = async(answer) => {
-    console.log('A 从服务端获取B的本地描述后 将其设置为A自己的远程描述')
+    console.log('发起方 从信令服务器获取接收方的本地描述后 将其设置为自己的远程描述')
     // 添加 answer(应答)
     if (!connection.currentRemoteDescription) {
       await connection.setRemoteDescription(answer)
@@ -446,7 +446,7 @@ import FileConfirm from './components/FileConfirm.vue'
 
   </div>
 
-  <button @click="connect">connection</button>
+  <button @click="connect" :disabled="wsConnectBtnStatus">connection</button>
   <input type="file" ref="fileEle" @change="onFileChange">
   <button @click="sendFileConfirm">send file</button>
 
