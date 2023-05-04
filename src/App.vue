@@ -4,21 +4,98 @@ import MsgComp from './components/MsgComp.vue'
 import GroupList from './components/GroupList.vue'
 import ConnectionTips from './components/ConnectionTips.vue'
 import CurrentConnection from './components/CurrentConnection.vue'
+import FileConfirm from './components/FileConfirm.vue'
 
   let wsInstance = null
   let connection = null
   let dataChannel = null
+  let sctp = null
 
-  const msg = ref('')
-  const msgList = ref([])
   const groupListRef = ref()
   const wrapperRef = ref()
   const screenRef = ref()
+  const fileReceiverRef = ref()
+
+  const msg = ref('')
+  const msgList = ref([])
+
+  const fileEle = ref()
+  const fileReceiver = ref({})
+  let receiver = {
+    chunk: [],
+    offset: 0
+  }
+  let fileList = []
+
+  // receiver文件确认
+  const handleConfirmClose = (accept) => {
+    wsInstance.send(JSON.stringify({
+      type: 'file-receiver',
+      data: accept
+    }))
+  }
+
+  const onFileChange = (e) => {
+    fileList = e.target.files
+  }
+
+  // 发送文件 发送小文件
+  const sendFile = async () => {
+    let offset = 0
+    let percent = 0
+    const chunkSize = sctp.maxMessageSize;
+    const file = fileList[0]
+
+    while(offset < file.size) {
+      const chunk = file.slice(offset, offset + chunkSize)
+      const buffer = await chunk.arrayBuffer()
+
+      dataChannel.send(buffer)
+
+      // bufferedAmount 16777216 = 16GB 临界值
+      // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmount
+      // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedamountlow_event
+      // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmountLowThreshold
+      // console.log('bufferedAmountLowThreshold' + dataChannel.bufferedAmountLowThreshold)
+
+      if (dataChannel.bufferedAmount > sctp.maxMessageSize * 2) {
+        // 等待缓存队列降到阈值之下 预设buffer
+        await new Promise(resolve => {
+          dataChannel.onbufferedamountlow = (ev) => {
+            resolve(0);
+          }
+        });
+      }
+
+      offset += buffer.byteLength
+      percent = offset / file.size
+      console.log((percent * 100).toFixed(2) + '%')
+    }
+
+
+    // 小文件
+    // const buffer = await fileList[0].arrayBuffer()
+    // dataChannel.send(buffer)
+  }
+
+  // 发送文件前 发送文件确认
+  const sendFileConfirm = () => {
+    const file = fileList[0]
+
+    wsInstance.send(JSON.stringify({
+      type: 'file-sender',
+      data: {
+        id: '',
+        name: file.name,
+        size: file.size,
+        type: file.type
+      }
+    }))
+  }
 
   watch(
     msgList,
     () => {
-      console.log(12313)
       nextTick(() => {
         let height = wrapperRef.value.offsetHeight
         screenRef.value.scrollTo({
@@ -58,6 +135,19 @@ import CurrentConnection from './components/CurrentConnection.vue'
         console.log('connection denied!')
         console.log(connection)
         console.log(dataChannel)
+        break;
+      case 'file-sender':
+        console.log('file recived confirm!')
+        fileReceiver.value = data
+        fileReceiverRef.value.show(data)
+        break;
+      case 'file-receiver':
+        console.log('file confirm response')
+        if(data) {
+          sendFile()
+        } else {
+          console.log('denied accept file')
+        }
         break;
       default:
         break;
@@ -100,6 +190,9 @@ import CurrentConnection from './components/CurrentConnection.vue'
   const handleChannelOpen = () => {
     console.log('channel open')
     CurrentConnectionRef.value.show()
+
+    // sctp
+    sctp = connection.sctp
   }
 
   // 信道关闭回调
@@ -113,26 +206,65 @@ import CurrentConnection from './components/CurrentConnection.vue'
     dataChannel.close()
   }
 
+  // 合并buffer
+  const concatFileBuffer = function (buffers) {
+    // 获取buffer总长度
+    const bufferLength = buffers.reduce((count, next) => count + next.byteLength , 0)
+
+    // 生成一个文件长度的arraybuffer
+    let bufferFile = new Uint8Array(bufferLength)
+    // 偏移
+    let offset = 0
+
+    // 在偏移位置set arraybuffer
+    for(let buffer of buffers) {
+      let sub = new Uint8Array(buffer)
+      bufferFile.set(sub, offset)
+      offset += buffer.byteLength
+    }
+
+    return bufferFile
+  }
+
+
   // 信道消息接受回调
   const handleChannelMessage = (e) => {
     console.log('Message receive!')
-    console.log(e.data)
 
-    msgList.value.push({
-      type: 'text',
-      data: {
-        self: false,
-        name: '密友',
-        msg: e.data
+    if(typeof e.data === 'string') {
+      msgList.value.push({
+        type: 'text',
+        data: {
+          self: false,
+          name: '密友',
+          msg: e.data
+        }
+      })
+    } else {
+      const { name, type, size } = fileReceiver.value
+
+      receiver.chunk.push(e.data)
+      receiver.offset += e.data.byteLength
+
+      if(receiver.offset === size) {
+        const df = new Blob([concatFileBuffer(receiver.chunk)], { type })
+        const link = document.createElement("a")
+        link.href = window.URL.createObjectURL(df)
+        link.style.display = 'none'
+        link.download = name
+        document.body.appendChild(link)
+        link.click()
+        window.URL.revokeObjectURL(link.href)
+        document.body.removeChild(link)
       }
-    })
+    } 
   }
 
   // 发起信道创建
   const create = () => {
     connection = new RTCPeerConnection()
 
-    dataChannel = connection.createDataChannel('arthur')
+    dataChannel = connection.createDataChannel('arthur',{ negotiated: true, id: 117 })
     console.log('创建信道')
 
     dataChannel.onmessage = handleChannelMessage
@@ -145,15 +277,24 @@ import CurrentConnection from './components/CurrentConnection.vue'
   // 接收方信道创建
   const receive = () => {
     connection = new RTCPeerConnection()
+    dataChannel = connection.createDataChannel('arthur',{ negotiated: true, id: 117 })
+    console.log('reciver channel create!')
 
-    connection.ondatachannel = (e) => {
-      console.log('reciver channel create!')
-      console.log(dataChannel)
-      dataChannel = e.channel
-      dataChannel.onmessage = handleChannelMessage
-      dataChannel.onopen = handleChannelOpen
-      dataChannel.onclose = handleChannelClose
-    }
+    dataChannel.onmessage = handleChannelMessage
+    dataChannel.onopen = handleChannelOpen
+    dataChannel.onclose = handleChannelClose
+
+    // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/sctp
+    // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/negotiated
+    // 
+    // connection.ondatachannel = (e) => {
+    //   console.log('reciver channel create!')
+    //   console.log(dataChannel)
+    //   dataChannel = e.channel
+    //   dataChannel.onmessage = handleChannelMessage
+    //   dataChannel.onopen = handleChannelOpen
+    //   dataChannel.onclose = handleChannelClose
+    // }
   }
 
   // 发送信道消息
@@ -282,6 +423,11 @@ import CurrentConnection from './components/CurrentConnection.vue'
       ref="CurrentConnectionRef"
       @close="onChannelClose"
     />
+
+    <FileConfirm
+      ref="fileReceiverRef"
+      @close="handleConfirmClose"
+    />
     <div class="message">
       <div ref="screenRef" class="message-container">
         <div ref="wrapperRef" class="message-wrapper">
@@ -301,7 +447,9 @@ import CurrentConnection from './components/CurrentConnection.vue'
   </div>
 
   <button @click="connect">connection</button>
-  <button @click="sendConnectionReq">sendConnectionReq</button>
+  <input type="file" ref="fileEle" @change="onFileChange">
+  <button @click="sendFileConfirm">send file</button>
+
 </template>
 
 <style scoped lang="less">
