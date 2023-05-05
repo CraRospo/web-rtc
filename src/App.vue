@@ -65,10 +65,12 @@ import { useStore } from '/@/store/global.js'
     percent.value = 0
 
     // 向接收方发送终止信号
-    unref(dataChannel).send(JSON.stringify({
-      type: 'action',
-      data: 'file-break'
-    }))
+    unref(dataChannel).send(
+      JSON.stringify({
+        type: 'action',
+        data: 'file-break'
+      })
+    )
 
     unref(fileReceiverRef).hide()
     unref(systemMessageRef).show('文件传输已中止')
@@ -78,7 +80,13 @@ import { useStore } from '/@/store/global.js'
   const receiverResetTransfer = () => {
     percent.value = 0
     fileReceiver.value = {}
-    Object.assign(receiver, { chunk: [], offset: 0 })
+    Object.assign(
+      receiver,
+      {
+        chunk: [],
+        offset: 0
+      }
+    )
     abortStatus.value = false
 
     unref(fileReceiverRef).hide()
@@ -90,10 +98,12 @@ import { useStore } from '/@/store/global.js'
     if (sender) { // 发起方取消
       senderAbortTransfer()
     } else { // 接收方取消
-      unref(dataChannel).send(JSON.stringify({
-        type: 'action',
-        data: 'file-abort'
-      }))
+      unref(dataChannel).send(
+        JSON.stringify({
+          type: 'action',
+          data: 'file-abort'
+        })
+      )
 
       abortStatus.value = true
     }
@@ -105,10 +115,16 @@ import { useStore } from '/@/store/global.js'
     const chunkSize = unref(sctp).maxMessageSize
     const file = unref(fileList)[0]
 
-    fileReceiverRef.value.show({ name: file.name, size: file.size }, 1)
+    fileReceiverRef.value.show(
+      {
+        name: file.name,
+        size: file.size
+      },
+      1
+    )
 
     while(offset < file.size) {
-      if (unref(abortStatus)) break ;
+      if (unref(abortStatus)) break;
       const chunk = file.slice(offset, offset + chunkSize)
       const buffer = await chunk.arrayBuffer()
 
@@ -192,7 +208,6 @@ import { useStore } from '/@/store/global.js'
 
   // 发送web-rtc连接请求
   const sendConnectionReq = (target) => {
-    console.log(unref(wsInstance))
     if (unref(wsInstance)) {
       sendMsg({
         type: 'connect',
@@ -203,16 +218,12 @@ import { useStore } from '/@/store/global.js'
 
   // 拒绝连接请求
   const handleChannelDenied = () => {
-    sendMsg({
-      type: 'denied'
-    })
+    sendMsg({ type: 'denied' })
   }
 
   // 同意链接请求
   const handleChannelAccept = () => {
-    sendMsg({
-      type: 'accept'
-    })
+    sendMsg({ type: 'accept' })
 
     // 接收方初始化连接
     receive()
@@ -265,6 +276,7 @@ import { useStore } from '/@/store/global.js'
 
     if(typeof e.data === 'string') { // 普通消息接收
       const { type, data } = JSON.parse(e.data)
+
       if (type === 'text') {
         msgScreenRef.value.msgList.push({
           type: 'text',
@@ -277,7 +289,6 @@ import { useStore } from '/@/store/global.js'
       } else {
         switch (data) {
           case 'file-break':
-            console.log('file-break')
             receiverResetTransfer()
             return 
           case 'file-abort':
@@ -290,7 +301,11 @@ import { useStore } from '/@/store/global.js'
       // 中止标识 即使收到arraybuffer也不再处理
       if (abortStatus.value) return false
 
-      const { name, type, size } = fileReceiver.value
+      const {
+        name,
+        type,
+        size
+      } = fileReceiver.value
 
       receiver.chunk.push(e.data)
       receiver.offset += e.data.byteLength
@@ -313,7 +328,13 @@ import { useStore } from '/@/store/global.js'
   // 发起方信道创建
   const create = () => {
     createConnection()
-    createChannel('arthur',{ negotiated: true, id: 117 })
+    createChannel(
+      'arthur',
+      {
+        negotiated: true,
+        id: 117
+      }
+    )
     console.log('发起方创建信道')
 
     unref(dataChannel).onmessage = handleChannelMessage
@@ -326,7 +347,13 @@ import { useStore } from '/@/store/global.js'
   // 接收方信道创建
   const receive = () => {
     createConnection()
-    createChannel('arthur', { negotiated: true, id: 117 })
+    createChannel(
+      'arthur',
+      {
+        negotiated: true,
+        id: 117
+      }
+    )
     console.log('接收方创建信道')
 
     unref(dataChannel).onmessage = handleChannelMessage
@@ -466,7 +493,12 @@ import { useStore } from '/@/store/global.js'
     />
   </div>
 
-  <button @click="connect" :disabled="wsConnectBtnStatus">connection</button>
+  <button
+    @click="connect"
+    :disabled="wsConnectBtnStatus"
+  >
+    connection
+  </button>
 
   <SystemMessage ref="systemMessageRef" />
 
