@@ -30,6 +30,10 @@ export const useStore = defineStore('main', {
       this.sctp = this.connection.sctp
     },
 
+    resetFileList() {
+      this.fileList = []
+    },
+
     sendMsg(msg) {
       const strMsg = JSON.stringify(msg)
       this.wsInstance.send(strMsg)

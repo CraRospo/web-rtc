@@ -5,27 +5,43 @@ import ConnectionTips from './components/ConnectionTips.vue'
 import CurrentConnection from './components/CurrentConnection.vue'
 import FileConfirm from './components/FileConfirm.vue'
 import MsgScreen from './components/MsgScreen.vue'
+import SystemMessage from './components/SystemMessage.vue'
 import { storeToRefs } from 'pinia'
 import { useStore } from '/@/store/global.js'
 
   // store
   const store = useStore()
-  const { wsInstance, connection, dataChannel, sctp, fileList } = storeToRefs(store)
-  const { createWsInstance, createConnection, createChannel, getConnectionSCTP, sendMsg } = store
-  console.log(store)
+  const {
+    wsInstance,
+    connection,
+    dataChannel,
+    sctp,
+    fileList
+  } = storeToRefs(store)
+  const {
+    createWsInstance,
+    createConnection,
+    createChannel,
+    getConnectionSCTP,
+    sendMsg,
+    resetFileList
+  } = store
 
   const groupListRef = ref()
   const msgScreenRef = ref()
   const fileReceiverRef = ref()
+  const systemMessageRef = ref()
 
   const wsConnectBtnStatus = ref(false)
+  const abortStatus = ref(false)
 
   const fileReceiver = ref({})
   let receiver = {
     chunk: [],
     offset: 0
-  
   }
+
+  const percent = ref(0)
 
   // 关闭弹窗
   window.addEventListener('beforeunload', () => {
@@ -41,15 +57,58 @@ import { useStore } from '/@/store/global.js'
       data: accept
     })
   }
+  
+  // 发起方停止传输
+  const senderAbortTransfer = () => {
+    abortStatus.value = true
+    resetFileList()
+    percent.value = 0
+
+    // 向接收方发送终止信号
+    unref(dataChannel).send(JSON.stringify({
+      type: 'action',
+      data: 'file-break'
+    }))
+
+    unref(fileReceiverRef).hide()
+    unref(systemMessageRef).show('文件传输已中止')
+  }
+
+  // 接收方重置传输
+  const receiverResetTransfer = () => {
+    percent.value = 0
+    fileReceiver.value = {}
+    Object.assign(receiver, { chunk: [], offset: 0 })
+    abortStatus.value = false
+
+    unref(fileReceiverRef).hide()
+    unref(systemMessageRef).show('文件传输已中止')
+  }
+
+  // 手动取消传输
+  const handleConfirmCancel = (sender) => {
+    if (sender) { // 发起方取消
+      senderAbortTransfer()
+    } else { // 接收方取消
+      unref(dataChannel).send(JSON.stringify({
+        type: 'action',
+        data: 'file-abort'
+      }))
+
+      abortStatus.value = true
+    }
+  }
 
   // 发送文件
   const sendFile = async () => {
     let offset = 0
-    let percent = 0
-    const chunkSize = unref(sctp).maxMessageSize;
+    const chunkSize = unref(sctp).maxMessageSize
     const file = unref(fileList)[0]
 
+    fileReceiverRef.value.show({ name: file.name, size: file.size }, 1)
+
     while(offset < file.size) {
+      if (unref(abortStatus)) break ;
       const chunk = file.slice(offset, offset + chunkSize)
       const buffer = await chunk.arrayBuffer()
 
@@ -70,9 +129,11 @@ import { useStore } from '/@/store/global.js'
       }
 
       offset += buffer.byteLength
-      percent = offset / file.size
+      percent.value = Number((offset / file.size * 100).toFixed(2))
     }
 
+    // 跳出发送循环后 abort复位
+    if (abortStatus.value) abortStatus.value = false
 
     // 小文件
     // const buffer = await fileList[0].arrayBuffer()
@@ -107,7 +168,7 @@ import { useStore } from '/@/store/global.js'
       case 'file-sender':
         console.log('发起方发送文件传输请求')
         fileReceiver.value = data
-        fileReceiverRef.value.show(data)
+        fileReceiverRef.value.show(data, 0)
         break;
       case 'file-receiver':
         console.log('接收方发送文件传输请求应答')
@@ -198,25 +259,42 @@ import { useStore } from '/@/store/global.js'
     return bufferFile
   }
 
-
   // 信道消息接受回调
   const handleChannelMessage = (e) => {
     console.log('收到消息')
 
-    if(typeof e.data === 'string') {
-      msgScreenRef.value.msgList.value.push({
-        type: 'text',
-        data: {
-          self: false,
-          name: '密友',
-          msg: e.data
+    if(typeof e.data === 'string') { // 普通消息接收
+      const { type, data } = JSON.parse(e.data)
+      if (type === 'text') {
+        msgScreenRef.value.msgList.push({
+          type: 'text',
+          data: {
+            self: false,
+            name: '密友',
+            msg: e.data
+          }
+        })
+      } else {
+        switch (data) {
+          case 'file-break':
+            console.log('file-break')
+            receiverResetTransfer()
+            return 
+          case 'file-abort':
+            senderAbortTransfer()
+            return 
         }
-      })
-    } else {
+      }
+    } else { // 文件接收
+
+      // 中止标识 即使收到arraybuffer也不再处理
+      if (abortStatus.value) return false
+
       const { name, type, size } = fileReceiver.value
 
       receiver.chunk.push(e.data)
       receiver.offset += e.data.byteLength
+      percent.value = Number((receiver.offset / size * 100).toFixed(2))
 
       if(receiver.offset === size) {
         const df = new Blob([concatFileBuffer(receiver.chunk)], { type })
@@ -270,6 +348,7 @@ import { useStore } from '/@/store/global.js'
 
   // 链接ws
   const handleWsOpen = () => {
+    console.log('ws链接成功')
     wsConnectBtnStatus.value = true
   }
 
@@ -359,7 +438,7 @@ import { useStore } from '/@/store/global.js'
 </script>
 
 <template>
-  <div class="main-container">
+  <div class="main-container" id="main">
     
     <GroupList
       ref="groupListRef"
@@ -377,7 +456,9 @@ import { useStore } from '/@/store/global.js'
 
     <FileConfirm
       ref="fileReceiverRef"
+      :percent="percent"
       @close="handleConfirmClose"
+      @cancel="handleConfirmCancel"
     />
 
     <MsgScreen
@@ -386,6 +467,8 @@ import { useStore } from '/@/store/global.js'
   </div>
 
   <button @click="connect" :disabled="wsConnectBtnStatus">connection</button>
+
+  <SystemMessage ref="systemMessageRef" />
 
 </template>
 

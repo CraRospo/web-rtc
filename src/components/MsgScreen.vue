@@ -52,15 +52,15 @@ const onFileChange = (e) => {
 
     // 发送文件前 发送文件确认
 const sendFileConfirm = () => {
-  const file = unref(fileList)[0]
+  const { name, size, type } = unref(fileList)[0]
 
   sendMsg({
     type: 'file-sender',
     data: {
       id: '',
-      name: file.name,
-      size: file.size,
-      type: file.type
+      name,
+      size,
+      type
     }
   })
 }
@@ -83,7 +83,10 @@ const send = () => {
 
   if (!message) return 
   // 发送消息
-  unref(dataChannel).send(message)
+  unref(dataChannel).send(JSON.stringify({
+    type: 'text',
+    data: message
+  }))
 
   // push当前消息
   msgList.value.push({

@@ -1,15 +1,34 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const visible = ref(false)
+const progressing = ref(false)
+const isSender = ref(false)
 const info = ref({})
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'cancel'])
 const handdleConfirm = (accept = false) => {
-  visible.value = false
-  console.log(accept)
+  accept ? progressing.value = true : visible.value = false
   emit('close', accept)
 }
+
+const handleCancel = (isSender) => {
+  console.log('issender' + isSender)
+  emit('cancel', isSender)
+}
+
+watch(
+  () => props.percent,
+  (val) => {
+    if (val === 100) {
+      visible.value = false
+    }
+  }
+)
+
+const props = defineProps({
+  percent: Number
+})
 
 // 计算文件大小
 const fileSize = (k) => {
@@ -27,9 +46,16 @@ const fileSize = (k) => {
   }
 }
 defineExpose({
-  show(data) {
+  show(data, renderType) {
     info.value = data
+    isSender.value = renderType === 1 ? true : false 
     visible.value = true
+  },
+  hide() {
+    visible.value = false
+    progressing.value = false
+    isSender.value = false
+    info.value = {}
   }
 })
 </script>
@@ -38,12 +64,16 @@ defineExpose({
   <div class="confirm-container" :class="{ 'show-confirm': visible }">
     <div class="confirm-title">文件确认</div>
     <div class="confirm-content">
-      <p>{{ info.id }} 向你发送文件 <span class="file-name">{{ info.name }} ( {{ fileSize(info.size) }} )</span> </p>
-      
+      <p v-if="!isSender">接收文件 <span class="file-name">{{ info.name }} ( {{ fileSize(info.size) }} )</span> </p>
+      <p v-else>发送文件<span class="file-name">{{ info.name }} ( {{ fileSize(info.size) }} )</span></p>
+      <div v-if="progressing || isSender">
+        <progress :value="props.percent" max="100"></progress>{{ `${props.percent} %` }}
+      </div>
     </div>
     <div class="confirm-bot">
-      <button class="accept" @click="handdleConfirm(true)">接受</button>
-      <button class="denied" @click="handdleConfirm(false)">拒绝</button>
+      <button v-if="!progressing && !isSender" class="accept" @click="handdleConfirm(true)">接受</button>
+      <button v-if="!progressing && !isSender" class="denied" @click="handdleConfirm(false)">拒绝</button>
+      <button v-if="progressing || isSender" class="cancel" @click="handleCancel(isSender)">取消</button>
     </div>
   </div>
 </template>
@@ -88,6 +118,9 @@ defineExpose({
     & > button {
       border: 0;
       text-decoration: underline;
+    }
+    .cancel {
+      margin-left: auto;
     }
   }
 }
