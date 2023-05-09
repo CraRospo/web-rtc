@@ -14,7 +14,7 @@
         <li class="operation-list-item" @click="fileEle.click()">
           <img :src="fileIcon" title="file" alt="file">
         </li>
-        <li class="operation-list-item">
+        <li class="operation-list-item" @click="shareScreen">
           <img :src="desktopIcon" title="desktop" alt="desktop">
         </li>
       </ul>
@@ -35,7 +35,8 @@ import fileIcon from '/@/assets/file.svg'
 import desktopIcon from '/@/assets/desktop.svg'
 
 const store = useStore()
-const { dataChannel, fileList } = storeToRefs(store)
+const { dataChannel, fileList, connection, shareStream } = storeToRefs(store)
+const { createStream } = store
 const { sendMsg } = store
 const msgList = ref([])
 const msg = ref('')
@@ -77,6 +78,19 @@ watch(
   }
 )
 
+const shareScreen = async () => {
+  try {
+    await createStream()
+  } catch(err) {
+    console.error("Error: " + err)
+  }
+
+  unref(dataChannel).send(JSON.stringify({
+    type: 'action',
+    data: 'share-req'
+  }))
+}
+
 // 发送信道消息
 const send = () => {
   const message = msg.value
@@ -102,7 +116,12 @@ const send = () => {
 }
 
 defineExpose({
-  msgList
+  msgList,
+  acceptStream() {
+    unref(shareStream).getTracks().forEach((track) => {
+      unref(connection).addTrack(track, unref(shareStream))
+    })
+  }
 })
 </script>
 

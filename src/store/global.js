@@ -9,11 +9,16 @@ export const useStore = defineStore('main', {
       connection: null,
       dataChannel: null,
       sctp: null,
+      shareStream: null,
       fileList: []
     }
   },
 
   actions: {
+    async createStream() {
+      this.shareStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+    },
+
     createConnection() {
       this.connection = new RTCPeerConnection()
     },

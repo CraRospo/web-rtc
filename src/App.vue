@@ -6,6 +6,8 @@ import CurrentConnection from './components/CurrentConnection.vue'
 import FileConfirm from './components/FileConfirm.vue'
 import MsgScreen from './components/MsgScreen.vue'
 import SystemMessage from './components/SystemMessage.vue'
+import ScreenShare from './components/ScreenShare.vue'
+import ReqModal from './components/ReqModal.vue'
 import { storeToRefs } from 'pinia'
 import { useStore } from '/@/store/global.js'
 
@@ -31,6 +33,8 @@ import { useStore } from '/@/store/global.js'
   const msgScreenRef = ref()
   const fileReceiverRef = ref()
   const systemMessageRef = ref()
+  const screenShareRef = ref()
+  const reqModalRef = ref()
 
   const wsConnectBtnStatus = ref(false)
   const abortStatus = ref(false)
@@ -43,7 +47,7 @@ import { useStore } from '/@/store/global.js'
 
   const percent = ref(0)
 
-  // 关闭弹窗
+  // 关闭弹窗 手动关闭和信令服务器之间的ws连接
   window.addEventListener('beforeunload', () => {
     if (unref(wsInstance) && unref(wsInstance).readyState === 1) {
       unref(wsInstance).close(1000)
@@ -176,24 +180,26 @@ import { useStore } from '/@/store/global.js'
         break;
       case 'accept':
         create()
-        console.log('接收方同意建立信道链接')
         break;
       case 'denied':
-        console.log('接收方拒绝建立信道链接')
         break;
       case 'file-sender':
-        console.log('发起方发送文件传输请求')
         fileReceiver.value = data
         fileReceiverRef.value.show(data, 0)
         break;
       case 'file-receiver':
-        console.log('接收方发送文件传输请求应答')
         if(data) {
           sendFile()
-          console.log('接收方允许接收文件')
-        } else {
-          console.log('接收方拒绝接收文件')
         }
+        break;
+      case 'stream-offer':
+        createStreamAnswer(data)
+        break;
+      case 'stream-answer':
+        receiveStreamAnswer(data)
+        break;
+      case 'new-ice-candidate':
+        setNewICEcandidate(data)
         break;
       default:
         break;
@@ -232,7 +238,6 @@ import { useStore } from '/@/store/global.js'
   const CurrentConnectionRef = ref()
   // 信道打开回调
   const handleChannelOpen = () => {
-    console.log('信道开启')
     CurrentConnectionRef.value.show()
 
     // sctp
@@ -241,12 +246,10 @@ import { useStore } from '/@/store/global.js'
 
   // 信道关闭回调
   const handleChannelClose = () => {
-    console.log('信道关闭')
   }
 
   // 主动关闭信道
   const onChannelClose = () => {
-    console.log('手动关闭信道')
     unref(dataChannel).close()
   }
 
@@ -272,7 +275,7 @@ import { useStore } from '/@/store/global.js'
 
   // 信道消息接受回调
   const handleChannelMessage = (e) => {
-    console.log('收到消息')
+    console.log(e.data)
 
     if(typeof e.data === 'string') { // 普通消息接收
       const { type, data } = JSON.parse(e.data)
@@ -293,7 +296,14 @@ import { useStore } from '/@/store/global.js'
             return 
           case 'file-abort':
             senderAbortTransfer()
+            return
+          case 'share-req':
+            reqModalRef.value.show({ description: '请求分享屏幕' })
             return 
+          case 'share-accept':
+            msgScreenRef.value.acceptStream()
+            createStreamOffer()
+            return
         }
       }
     } else { // 文件接收
@@ -325,9 +335,21 @@ import { useStore } from '/@/store/global.js'
     } 
   }
 
-  // 发起方信道创建
-  const create = () => {
+  // 轨道流
+  const handleTrack = (ev) => {
+    if (ev.streams && ev.streams[0]) {
+      screenShareRef.value.setSource(ev.streams[0])
+    } else {
+      let inboundStream = new MediaStream(ev.track);
+      screenShareRef.value.setSource(inboundStream)
+    }
+  }
+
+  // 初始化 创建链接 创建信道
+  const init = () => {
     createConnection()
+    unref(connection).ontrack = handleTrack
+
     createChannel(
       'arthur',
       {
@@ -335,47 +357,25 @@ import { useStore } from '/@/store/global.js'
         id: 117
       }
     )
-    console.log('发起方创建信道')
 
     unref(dataChannel).onmessage = handleChannelMessage
     unref(dataChannel).onopen = handleChannelOpen
     unref(dataChannel).onclose = handleChannelClose
+  }
 
+  // 发起方信道创建
+  const create = () => {
+    init()
     createOffer()
   }
 
   // 接收方信道创建
   const receive = () => {
-    createConnection()
-    createChannel(
-      'arthur',
-      {
-        negotiated: true,
-        id: 117
-      }
-    )
-    console.log('接收方创建信道')
-
-    unref(dataChannel).onmessage = handleChannelMessage
-    unref(dataChannel).onopen = handleChannelOpen
-    unref(dataChannel).onclose = handleChannelClose
-
-    // https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/sctp
-    // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/negotiated
-    // 
-    // connection.ondatachannel = (e) => {
-    //   console.log('reciver channel create!')
-    //   console.log(dataChannel)
-    //   dataChannel = e.channel
-    //   dataChannel.onmessage = handleChannelMessage
-    //   dataChannel.onopen = handleChannelOpen
-    //   dataChannel.onclose = handleChannelClose
-    // }
+    init()
   }
 
   // 链接ws
   const handleWsOpen = () => {
-    console.log('ws链接成功')
     wsConnectBtnStatus.value = true
   }
 
@@ -406,16 +406,13 @@ import { useStore } from '/@/store/global.js'
   // 发起方创建offer
   const createOffer = async() => {
     const offer = await unref(connection).createOffer()
-    console.log('发起方 创建offer')
     await unref(connection).setLocalDescription(offer)
-    console.log('发起方 将自创建的offer设置为本地描述')
 
     // ICE候选人的本地描述发生改变触发
     // https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/icecandidate_event
     unref(connection).onicecandidate = async (event) => {
       if (event.candidate) {
         const offerSdp = unref(connection).localDescription
-        console.log('发起方 在设置完自己的本地描述后 将其发送给信令服务器')
 
         // 发送 offer
         if (offerSdp) {
@@ -428,13 +425,54 @@ import { useStore } from '/@/store/global.js'
     }
   }
 
+  // 新发起一个流offer
+  const createStreamOffer = async() => {
+    const offer = await unref(connection).createOffer()
+    await unref(connection).setLocalDescription(offer)
+
+    sendMsg({
+      type: "stream-offer",
+      data: unref(connection).localDescription
+    })
+
+    unref(connection).onicecandidate = async (event) => {
+      if (event.candidate) {
+        sendMsg({
+          type: "new-ice-candidate",
+          data: event.candidate
+        })
+      }
+    }
+  }
+
+  const setNewICEcandidate = (data) => {
+    const candidate = new RTCIceCandidate(data)
+    unref(connection).addIceCandidate(candidate)
+  }
+
+  // 接受一个流offer
+  const createStreamAnswer = async (sdp) => {
+    const desc = new RTCSessionDescription(sdp);
+    await unref(connection).setRemoteDescription(desc)
+    const answer = await unref(connection).createAnswer()
+    await unref(connection).setLocalDescription(answer)
+    sendMsg({
+      type: "stream-answer",
+      data: unref(connection).localDescription
+    })
+  }
+
+  // 信道流发生改变
+  const receiveStreamAnswer = async(answer) => {
+    await unref(connection).setRemoteDescription(answer)
+  }
+
   // 接收方创建answer
   const createAnswer = async (offer) => {
     unref(connection).onicecandidate = async (event) => {
 
       // 当一个新的 answer ICE candidate 被创建时
       if (event.candidate) {
-        console.log('接收方 在设置完自己的本地描述后 将其发送给信令服务器')
         sendMsg({
           type: 'answer',
           data: unref(connection).localDescription
@@ -444,11 +482,8 @@ import { useStore } from '/@/store/global.js'
 
     try {
       await unref(connection).setRemoteDescription(offer)
-      console.log('接收方 将从信令服务器获取到的发起方的本地描述 设置成自己的远端描述')
       const answer = await unref(connection).createAnswer()
-      console.log('接收方 创建一个应答')
       await unref(connection).setLocalDescription(answer)
-      console.log('接收方 将自创建的应答设置为自己的本地描述')
     } catch (error) {
       console.log(error)
     }
@@ -456,7 +491,6 @@ import { useStore } from '/@/store/global.js'
 
   // 发送方收到接收方的answer
   const receiveAnswer = async(answer) => {
-    console.log('发起方 从信令服务器获取接收方的本地描述后 将其设置为自己的远程描述')
     // 添加 answer(应答)
     if (!unref(connection).currentRemoteDescription) {
       await unref(connection).setRemoteDescription(answer)
@@ -490,6 +524,15 @@ import { useStore } from '/@/store/global.js'
 
     <MsgScreen
       ref="msgScreenRef"
+    />
+    
+    <ReqModal
+      ref="reqModalRef"
+      @confirm="screenShareRef.show()"
+    />
+
+    <ScreenShare
+      ref="screenShareRef"
     />
   </div>
 
