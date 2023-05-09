@@ -2,30 +2,73 @@
   <div v-if="visible" class="container">
     <video class="video" ref="videoRef" autoplay></video>
     <div class="operation">
-      <CustomButton @click="onAbort">abort</CustomButton>
-      <CustomButton @click="onRecord">{{ recordStatus ? 'record' : 'stop' }}</CustomButton>
-      <CustomButton @click="onPrintScreen">print screen</CustomButton>
+      <CustomButton @click="onAbort">结束共享</CustomButton>
+      <CustomButton @click="onRecord">{{ recordStatus ? '结束' : '录制' }}</CustomButton>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, unref } from 'vue'
+import { useStore } from '/@/store/global.js'
+const { sendMsg } = useStore()
 
 const visible = ref(false)
 const videoRef = ref()
 const recordStatus = ref(false)
+const recorder = ref()
+const recorderChunk = ref([])
 
+// 停止接收流
 const onAbort = () => {
+  let tracks = unref(videoRef).srcObject.getTracks()
+  tracks.forEach((track) => track.stop())
+  unref(videoRef).srcObject = null
 
+  sendMsg({
+    type: 'stream-abort'
+  })
 }
 
+// 录制
 const onRecord = () => {
-
+  if (unref(recordStatus)) {
+    try {
+      unref(recorder).stop()
+      recordStatus.value = false
+    } catch (error) {
+      console.log(error)
+    }
+  } else {
+    const source = unref(videoRef).srcObject
+    recorder.value = new MediaRecorder(source)
+    unref(recorder).ondataavailable = handleDataAvailable
+    unref(recorder).start()
+    recordStatus.value = true
+  }
 }
 
-const onPrintScreen = () => {
-  
+// stream chunk
+const handleDataAvailable = (event) => {
+  if (event.data.size > 0) {
+    recorderChunk.value.push(event.data)
+    download()
+  } else {
+    console.log('no stream flow!')
+  }
+}
+
+const download = () => {
+  var blob = new Blob(unref(recorderChunk), { type: unref(recorderChunk)[0].type })
+
+  var url = URL.createObjectURL(blob)
+  var a = document.createElement("a")
+  document.body.appendChild(a)
+  a.style = "display: none"
+  a.href = url
+  a.download = "record"
+  a.click()
+  window.URL.revokeObjectURL(url)
 }
 
 defineExpose({
@@ -34,8 +77,7 @@ defineExpose({
   },
 
   setSource(source) {
-    console.log(source)
-    videoRef.value.srcObject = source
+    unref(videoRef).srcObject = source
   }
 })
 
@@ -55,7 +97,8 @@ defineExpose({
   }
   .operation {
     display: flex;
-    justify-content: space-between;
+    justify-content: start;
+    gap: 20px;
     align-items: center;
   }
 }

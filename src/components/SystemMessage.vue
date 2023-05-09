@@ -1,6 +1,9 @@
 <template>
   <Teleport to="#main">
-    <div v-if="visible" class="message-container">
+    <div
+      v-if="visible"
+      class="message-container"
+    >
       {{ message }}
     </div>
   </Teleport>

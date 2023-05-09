@@ -1,7 +1,13 @@
 <template>
   <div class="message">
-    <div ref="screenRef" class="message-container">
-      <div ref="wrapperRef" class="message-wrapper">
+    <div
+      ref="screenRef"
+      class="message-container"
+    >
+      <div
+        ref="wrapperRef"
+        class="message-wrapper"
+      >
         <MsgComp
           v-for="(msg, index) in msgList"
           :msg="msg"
@@ -11,19 +17,45 @@
     </div>
     <div class="operation">
       <ul class="operation-list">
-        <li class="operation-list-item" @click="fileEle.click()">
-          <img :src="fileIcon" title="file" alt="file">
+        <li
+          class="operation-list-item"
+          @click="fileEle.click()"
+        >
+          <img
+            :src="fileIcon"
+            title="file"
+            alt="file"
+          >
         </li>
-        <li class="operation-list-item" @click="shareScreen">
-          <img :src="desktopIcon" title="desktop" alt="desktop">
+        <li
+          class="operation-list-item"
+          @click="shareScreen"
+        >
+          <img
+            :src="desktopIcon"
+            title="desktop"
+            alt="desktop"
+          >
         </li>
       </ul>
-      <textarea class="text-input" id="story" name="story" rows="5" v-model="msg" @keyup.enter="send"></textarea>
-      <button class="send-btn" @click="send">send</button>
+      <textarea
+        class="text-input"
+        id="story"
+        name="story"
+        rows="5"
+        v-model="msg"
+        @keyup.enter="send"
+      >
+      </textarea>
     </div>
   </div>
 
-  <input style="display: none" type="file" ref="fileEle" @change="onFileChange">
+  <input
+    style="display: none"
+    type="file"
+    ref="fileEle"
+    @change="onFileChange"
+  >
 </template>
 
 <script setup>

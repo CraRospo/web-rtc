@@ -1,5 +1,7 @@
 <script setup>
 import { ref } from 'vue'
+import LogoComp from './LogoComp.vue';
+import emptyIconUrl from '/@/assets/empty.svg'
 
 const group = ref([])
 const current = ref('')
@@ -37,13 +39,45 @@ defineExpose({
 
 <template>
   <div class="group">
-    <ul class="group-list">
-      <li class="group-item" v-for="g in group" :key="g.id" @mouseenter="current = g.id" @mouseleave="current = ''">
-        <img class="icon" :src="g.icon ?? 'https://placeholder.com/28x28.png'" alt="">
-        <p class="name">{{ g.name }}</p>
-        <button class="connect-btn" :class="{ 'btn-show': current === g.id  }" @click="createConnection">connect</button>
-      </li>
-    </ul>
+    <LogoComp class="logo-comp" />
+    <div class="group-wrapper">
+      <ul
+        v-if="group.length"
+        class="group-list"
+      >
+        <li
+          class="group-item"
+          v-for="g in group"
+          :key="g.id"
+          @mouseenter="current = g.id"
+          @mouseleave="current = ''"
+        >
+          <img
+            class="icon"
+            :src="g.icon ?? 'https://placeholder.com/28x28.png'"
+            alt="avatar"
+          >
+          <p class="name">{{ g.name }}</p>
+          <button
+            class="connect-btn"
+            :class="{ 'btn-show': current === g.id  }"
+            @click="createConnection"
+          >
+            connect
+          </button>
+        </li>
+      </ul>
+      <div
+        v-else
+        class="empty"
+      >
+        <img
+          :src="emptyIconUrl"
+          alt="empty"
+        >
+        <p class="empty-text">empty</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -56,7 +90,6 @@ defineExpose({
   border-right: 1px solid #ccc;
 }
 .group-list {
-
   .group-item {
     flex: none;
     padding: 6px 8px;
@@ -79,6 +112,27 @@ defineExpose({
     }
   }
 }
+.group-wrapper {
+  width: 100%;
+  height: calc(100% - 48px);
+  border-top: 1px solid #ccc;
+}
+.logo-comp {
+  height: 48px;
+}
+.empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  .empty-text {
+    margin-top: 16px;
+    color: #bfbfbf;
+  }
+}
+
 .connect-btn {
   padding: 4px 8px;
   opacity: 0;

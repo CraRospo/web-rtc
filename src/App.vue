@@ -201,6 +201,9 @@ import { useStore } from '/@/store/global.js'
       case 'new-ice-candidate':
         setNewICEcandidate(data)
         break;
+      case 'stream-abort':
+        unref(systemMessageRef).show('屏幕共享已中止')
+        break;
       default:
         break;
     }
@@ -298,10 +301,11 @@ import { useStore } from '/@/store/global.js'
             senderAbortTransfer()
             return
           case 'share-req':
-            reqModalRef.value.show({ description: '请求分享屏幕' })
+            unref(reqModalRef).show({ description: '请求分享屏幕' })
             return 
           case 'share-accept':
-            msgScreenRef.value.acceptStream()
+            unref(systemMessageRef).show('屏幕共享已被接受')
+            unref(msgScreenRef).acceptStream()
             createStreamOffer()
             return
         }
@@ -499,7 +503,10 @@ import { useStore } from '/@/store/global.js'
 </script>
 
 <template>
-  <div class="main-container" id="main">
+  <div
+    id="main"
+    class="main-container"
+  >
     
     <GroupList
       ref="groupListRef"
