@@ -27,7 +27,10 @@ export const useStore = defineStore('main', {
       this.dataChannel = this.connection.createDataChannel(name, options)
     },
 
-    createWsInstance(url = 'ws://127.0.0.1:8010') {
+    createWsInstance() {
+      const url = import.meta.env.MODE === 'production'
+        ? 'ws://123.60.161.140:8010'
+        : 'ws://127.0.0.1:8010' 
       this.wsInstance = new WebSocket(url)
     },
 

@@ -8,6 +8,7 @@ import MsgScreen from './components/MsgScreen.vue'
 import SystemMessage from './components/SystemMessage.vue'
 import ScreenShare from './components/ScreenShare.vue'
 import ReqModal from './components/ReqModal.vue'
+import LoginComp from './components/LoginComp.vue'
 import { storeToRefs } from 'pinia'
 import { useStore } from '/@/store/global.js'
 
@@ -36,7 +37,6 @@ import { useStore } from '/@/store/global.js'
   const screenShareRef = ref()
   const reqModalRef = ref()
 
-  const wsConnectBtnStatus = ref(false)
   const abortStatus = ref(false)
 
   const fileReceiver = ref({})
@@ -380,31 +380,15 @@ import { useStore } from '/@/store/global.js'
 
   // 链接ws
   const handleWsOpen = () => {
-    wsConnectBtnStatus.value = true
+
   }
 
   // 发起ws验证
-  const connect = async () => {
-    const res = await fetch('/api/login',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userName: `用户${new Date().valueOf()}`,
-          password: '123456'
-        })
-      }
-    )
-    const response = await res.json()
+  const connect = () => {
+    createWsInstance()
 
-    if (response.code === 0) {
-      createWsInstance()
-
-      unref(wsInstance).onmessage = handleWsMsg
-      unref(wsInstance).onopen = handleWsOpen
-    }
+    unref(wsInstance).onmessage = handleWsMsg
+    unref(wsInstance).onopen = handleWsOpen
   }
 
   // 发起方创建offer
@@ -503,11 +487,12 @@ import { useStore } from '/@/store/global.js'
 </script>
 
 <template>
+  <LoginComp @success="connect()"/>
+
   <div
     id="main"
     class="main-container"
   >
-    
     <GroupList
       ref="groupListRef"
       @connect="(target) => sendConnectionReq(target)"
@@ -542,13 +527,6 @@ import { useStore } from '/@/store/global.js'
       ref="screenShareRef"
     />
   </div>
-
-  <button
-    @click="connect"
-    :disabled="wsConnectBtnStatus"
-  >
-    connection
-  </button>
 
   <SystemMessage ref="systemMessageRef" />
 
