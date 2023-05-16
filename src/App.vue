@@ -204,6 +204,9 @@ import { useStore } from '/@/store/global.js'
       case 'stream-abort':
         unref(systemMessageRef).show('屏幕共享已中止')
         break;
+      case 'close':
+        onCloseConnection()
+        break;
       default:
         break;
     }
@@ -260,7 +263,19 @@ import { useStore } from '/@/store/global.js'
 
   // 主动关闭信道
   const onChannelClose = () => {
+    sendMsg({
+      type: 'close',
+      target: unref(target)
+    })
+
+    onCloseConnection()
+  }
+
+  // 关闭信道连接
+  const onCloseConnection = () => {
     closeConnection()
+    CurrentConnectionRef.value.hide()
+    unref(systemMessageRef).show('连接已中止')
   }
 
   // 合并buffer

@@ -12,6 +12,9 @@ const handleClose = () => {
 defineExpose({
   show() {
     visible.value = true
+  },
+  hide() {
+    visible.value = false
   }
 })
 </script>

@@ -19,7 +19,7 @@
       <ul class="operation-list">
         <li
           class="operation-list-item"
-          @click="onFilePass"
+          @click="fileEle.click()"
         >
           <img
             :src="fileIcon"
@@ -56,6 +56,8 @@
     ref="fileEle"
     @change="onFileChange"
   >
+
+  <SystemMessage ref="systemMsgRef" />
 </template>
 
 <script setup>
@@ -65,25 +67,22 @@ import { useStore } from '/@/store/global'
 import { storeToRefs } from 'pinia'
 import fileIcon from '/@/assets/file.svg'
 import desktopIcon from '/@/assets/desktop.svg'
+import SystemMessage from './SystemMessage.vue'
 
 const store = useStore()
 const { dataChannel, fileList, connection, shareStream } = storeToRefs(store)
 const { createStream } = store
 const msgList = ref([])
 const msg = ref('')
+const systemMsgRef = ref()
 
 const fileEle = ref()
 const wrapperRef = ref()
 const screenRef = ref()
 
-const onFilePass = () => {
-  console.log(fileEle)
-  unref(fileEle).click()
-}
-
 const onFileChange = (e) => {
   unref(fileList).splice(0, 0, ...e.target.files)
-  console.log(fileList)
+
   sendFileConfirm()
 }
 
@@ -135,6 +134,11 @@ const send = () => {
   const message = msg.value
 
   if (!message) return 
+
+  if (unref(dataChannel)?.readyState !== 'open') {
+    return unref(systemMsgRef).show('还未建立连接')
+  }
+
   // 发送消息
   unref(dataChannel).send(JSON.stringify({
     type: 'text',
