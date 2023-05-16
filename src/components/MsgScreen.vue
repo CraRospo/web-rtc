@@ -56,8 +56,6 @@
     ref="fileEle"
     @change="onFileChange"
   >
-
-  <SystemMessage ref="systemMsgRef" />
 </template>
 
 <script setup>
@@ -74,7 +72,6 @@ const { dataChannel, fileList, connection, shareStream } = storeToRefs(store)
 const { createStream } = store
 const msgList = ref([])
 const msg = ref('')
-const systemMsgRef = ref()
 
 const fileEle = ref()
 const wrapperRef = ref()
@@ -135,9 +132,7 @@ const send = () => {
 
   if (!message) return 
 
-  if (unref(dataChannel)?.readyState !== 'open') {
-    return unref(systemMsgRef).show('还未建立连接')
-  }
+  if (unref(dataChannel)?.readyState !== 'open') return 
 
   // 发送消息
   unref(dataChannel).send(JSON.stringify({

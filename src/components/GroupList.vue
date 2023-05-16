@@ -57,11 +57,12 @@ defineExpose({
             :src="g.icon ?? 'https://placeholder.com/28x28.png'"
             alt="avatar"
           >
-          <p class="name">{{ g.name }}</p>
+          <p class="name" :class="{ 'busy': g.status }">{{ g.name }}</p>
           <button
             class="connect-btn"
             :class="{ 'btn-show': current === g.id  }"
             @click="createConnection"
+            :disabled="g.status"
           >
             connect
           </button>
@@ -103,12 +104,30 @@ defineExpose({
       height: 28px;
     }
     .name {
+      padding-left: 12px;
+      position: relative;
       flex: auto;
       white-space: nowrap;
       text-overflow: ellipsis;
       overflow: hidden;
       font-size: 14px;
       text-align: left;
+      &:before {
+        content: '';
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        top: 50%;
+        left: 0;
+        border-radius: 8px;
+        margin-top: -4px;
+        background-color: green;
+      }
+    }
+    .busy {
+      &:before {
+        background-color: red;
+      }
     }
   }
 }
