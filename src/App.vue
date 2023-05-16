@@ -19,7 +19,8 @@ import { useStore } from '/@/store/global.js'
     connection,
     dataChannel,
     sctp,
-    fileList
+    fileList,
+    target
   } = storeToRefs(store)
   const {
     createWsInstance,
@@ -27,7 +28,9 @@ import { useStore } from '/@/store/global.js'
     createChannel,
     getConnectionSCTP,
     sendMsg,
-    resetFileList
+    resetFileList,
+    setTarget,
+    closeConnection
   } = store
 
   const groupListRef = ref()
@@ -56,10 +59,13 @@ import { useStore } from '/@/store/global.js'
 
   // receiver文件确认
   const handleConfirmClose = (accept) => {
-    sendMsg({
-      type: 'file-receiver',
-      data: accept
-    })
+    unref(dataChannel).send(
+      JSON.stringify({
+        type: 'action',
+        data: 'file-receiver',
+        params: accept
+      })
+    )
   }
   
   // 发起方停止传输
@@ -76,6 +82,7 @@ import { useStore } from '/@/store/global.js'
       })
     )
 
+    unref(msgScreenRef).resetFileRef()
     unref(fileReceiverRef).hide()
     unref(systemMessageRef).show('文件传输已中止')
   }
@@ -92,7 +99,8 @@ import { useStore } from '/@/store/global.js'
       }
     )
     abortStatus.value = false
-
+    
+    unref(msgScreenRef).resetFileRef()
     unref(fileReceiverRef).hide()
     unref(systemMessageRef).show('文件传输已中止')
   }
@@ -172,8 +180,8 @@ import { useStore } from '/@/store/global.js'
         await receiveAnswer(data)
         break;
       case 'system':
-        msgScreenRef.value.msgList.push({ type, data })
-        groupListRef.value.getGroupList()
+        unref(msgScreenRef).setMsgIn({ type, data })
+        unref(groupListRef).getGroupList()
         break;
       case 'connect':
         renderChannelReq(data)
@@ -182,15 +190,7 @@ import { useStore } from '/@/store/global.js'
         create()
         break;
       case 'denied':
-        break;
-      case 'file-sender':
-        fileReceiver.value = data
-        fileReceiverRef.value.show(data, 0)
-        break;
-      case 'file-receiver':
-        if(data) {
-          sendFile()
-        }
+        unref(systemMessageRef).show('连接请求已被拒绝')
         break;
       case 'stream-offer':
         createStreamAnswer(data)
@@ -212,27 +212,34 @@ import { useStore } from '/@/store/global.js'
   // 请求弹窗
   const connectionTipsRef = ref()
   const renderChannelReq = (data) => {
+    setTarget(data.reqId)
     connectionTipsRef.value.show(data.reqName)
   }
 
   // 发送web-rtc连接请求
-  const sendConnectionReq = (target) => {
+  const sendConnectionReq = (id) => {
     if (unref(wsInstance)) {
+      if (unref(connection)?.connectionState === 'connected') {
+        return unref(systemMessageRef).show('您已经处于一个连接中了')
+      }
+
+      setTarget(id)
+
       sendMsg({
         type: 'connect',
-        data: target
+        target: unref(target)
       })
     }
   }
 
   // 拒绝连接请求
   const handleChannelDenied = () => {
-    sendMsg({ type: 'denied' })
+    sendMsg({ type: 'denied', target: unref(target) })
   }
 
   // 同意链接请求
   const handleChannelAccept = () => {
-    sendMsg({ type: 'accept' })
+    sendMsg({ type: 'accept', target: unref(target) })
 
     // 接收方初始化连接
     receive()
@@ -253,7 +260,7 @@ import { useStore } from '/@/store/global.js'
 
   // 主动关闭信道
   const onChannelClose = () => {
-    unref(dataChannel).close()
+    closeConnection()
   }
 
   // 合并buffer
@@ -281,19 +288,25 @@ import { useStore } from '/@/store/global.js'
     console.log(e.data)
 
     if(typeof e.data === 'string') { // 普通消息接收
-      const { type, data } = JSON.parse(e.data)
+      const { type, data, params } = JSON.parse(e.data)
 
       if (type === 'text') {
-        msgScreenRef.value.msgList.push({
+        unref(msgScreenRef).setMsgIn({
           type: 'text',
           data: {
-            self: false,
             name: '密友',
-            msg: e.data
+            msg: data
           }
         })
       } else {
         switch (data) {
+          case 'file-sender':
+            fileReceiver.value = params
+            fileReceiverRef.value.show(params, 0)
+            break;
+          case 'file-receiver':
+            if(params) sendFile()
+            break;
           case 'file-break':
             receiverResetTransfer()
             return 
@@ -406,6 +419,7 @@ import { useStore } from '/@/store/global.js'
         if (offerSdp) {
           sendMsg({
             type: 'offer',
+            target: unref(target),
             data: offerSdp
           })
         }
@@ -420,6 +434,7 @@ import { useStore } from '/@/store/global.js'
 
     sendMsg({
       type: "stream-offer",
+      target: unref(target),
       data: unref(connection).localDescription
     })
 
@@ -427,6 +442,7 @@ import { useStore } from '/@/store/global.js'
       if (event.candidate) {
         sendMsg({
           type: "new-ice-candidate",
+          target: unref(target),
           data: event.candidate
         })
       }
@@ -446,6 +462,7 @@ import { useStore } from '/@/store/global.js'
     await unref(connection).setLocalDescription(answer)
     sendMsg({
       type: "stream-answer",
+      target: unref(target),
       data: unref(connection).localDescription
     })
   }
@@ -463,6 +480,7 @@ import { useStore } from '/@/store/global.js'
       if (event.candidate) {
         sendMsg({
           type: 'answer',
+          target: unref(target),
           data: unref(connection).localDescription
         })
       }

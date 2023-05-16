@@ -19,7 +19,7 @@
       <ul class="operation-list">
         <li
           class="operation-list-item"
-          @click="fileEle.click()"
+          @click="onFilePass"
         >
           <img
             :src="fileIcon"
@@ -69,7 +69,6 @@ import desktopIcon from '/@/assets/desktop.svg'
 const store = useStore()
 const { dataChannel, fileList, connection, shareStream } = storeToRefs(store)
 const { createStream } = store
-const { sendMsg } = store
 const msgList = ref([])
 const msg = ref('')
 
@@ -77,9 +76,14 @@ const fileEle = ref()
 const wrapperRef = ref()
 const screenRef = ref()
 
+const onFilePass = () => {
+  console.log(fileEle)
+  unref(fileEle).click()
+}
+
 const onFileChange = (e) => {
   unref(fileList).splice(0, 0, ...e.target.files)
-
+  console.log(fileList)
   sendFileConfirm()
 }
 
@@ -87,15 +91,18 @@ const onFileChange = (e) => {
 const sendFileConfirm = () => {
   const { name, size, type } = unref(fileList)[0]
 
-  sendMsg({
-    type: 'file-sender',
-    data: {
-      id: '',
-      name,
-      size,
-      type
-    }
-  })
+  unref(dataChannel).send(
+    JSON.stringify({
+      type: 'action',
+      data: 'file-sender',
+      params: {
+        id: '',
+        name,
+        size,
+        type
+      }
+    })
+  )
 }
 
 watch(
@@ -148,7 +155,12 @@ const send = () => {
 }
 
 defineExpose({
-  msgList,
+  resetFileRef() {
+    unref(fileEle).value = ''
+  },
+  setMsgIn(info) {
+    msgList.value.push(info)
+  },
   acceptStream() {
     unref(shareStream).getTracks().forEach((track) => {
       unref(connection).addTrack(track, unref(shareStream))

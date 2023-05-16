@@ -22,10 +22,12 @@ const d = ref('')
 
 const emit = defineEmits(['confirm'])
 const handleConfirm = () => {
-  unref(dataChannel).send(JSON.stringify({
-    type: 'action',
-    data: 'share-accept'
-  }))
+  unref(dataChannel).send(
+    JSON.stringify({
+      type: 'action',
+      data: 'share-accept'
+    })
+  )
 
   visible.value = false
   emit('confirm')

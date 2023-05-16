@@ -10,6 +10,7 @@ export const useStore = defineStore('main', {
       dataChannel: null,
       sctp: null,
       shareStream: null,
+      target: '',
       fileList: []
     }
   },
@@ -17,6 +18,10 @@ export const useStore = defineStore('main', {
   actions: {
     async createStream() {
       this.shareStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+    },
+
+    setTarget(id) {
+      this.target = id
     },
 
     createConnection() {
@@ -45,6 +50,12 @@ export const useStore = defineStore('main', {
     sendMsg(msg) {
       const strMsg = JSON.stringify(msg)
       this.wsInstance.send(strMsg)
+    },
+
+    closeConnection() {
+      this.dataChannel.close()
+      this.connection.close()
+      this.target = ''
     }
   }
 })

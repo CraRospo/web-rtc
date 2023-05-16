@@ -10,8 +10,12 @@
 
 <script setup>
 import { ref, unref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useStore } from '/@/store/global.js'
-const { sendMsg } = useStore()
+
+const store = useStore()
+const { target } = storeToRefs(store)
+const { sendMsg } = store
 
 const visible = ref(false)
 const videoRef = ref()
@@ -26,8 +30,11 @@ const onAbort = () => {
   unref(videoRef).srcObject = null
 
   sendMsg({
-    type: 'stream-abort'
+    type: 'stream-abort',
+    target: unref(target)
   })
+
+  visible.value = false
 }
 
 // 录制
