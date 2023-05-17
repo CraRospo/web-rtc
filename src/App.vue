@@ -124,7 +124,7 @@ import { useStore } from '/@/store/global.js'
   // 发送文件
   const sendFile = async () => {
     let offset = 0
-    const chunkSize = unref(sctp).maxMessageSize
+    const chunkSize = unref(sctp)?.maxMessageSize ?? 262144
     const file = unref(fileList)[0]
 
     fileReceiverRef.value.show(
@@ -147,7 +147,7 @@ import { useStore } from '/@/store/global.js'
       // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedamountlow_event
       // https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmountLowThreshold
 
-      if (unref(dataChannel).bufferedAmount > unref(sctp).maxMessageSize * 2) {
+      if (unref(dataChannel).bufferedAmount > chunkSize * 2) {
         // 等待缓存队列降到阈值之下 预设buffer
         await new Promise(resolve => {
           unref(dataChannel).onbufferedamountlow = (ev) => {
@@ -278,8 +278,13 @@ import { useStore } from '/@/store/global.js'
     unref(systemMessageRef).show('连接已中止')
   }
 
-  // 合并buffer
-  const concatFileBuffer = function (buffers) {
+  // 合并文件块
+  const mergeFileChunk = function (buffers) {
+    // fileFox - Blob  chrome - ArrayBuffer
+    const isBuffer = buffers[0] instanceof Blob
+
+    if (isBuffer) return buffers
+
     // 获取buffer总长度
     const bufferLength = buffers.reduce((count, next) => count + next.byteLength , 0)
 
@@ -350,11 +355,12 @@ import { useStore } from '/@/store/global.js'
       } = fileReceiver.value
 
       receiver.chunk.push(e.data)
-      receiver.offset += e.data.byteLength
+      receiver.offset += e.data.size ?? e.data.byteLength
       percent.value = Number((receiver.offset / size * 100).toFixed(2))
 
       if(receiver.offset === size) {
-        const df = new Blob([concatFileBuffer(receiver.chunk)], { type })
+        
+        const df = new Blob([mergeFileChunk(receiver.chunk)], { type })
         const link = document.createElement("a")
         link.href = window.URL.createObjectURL(df)
         link.style.display = 'none'
