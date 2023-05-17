@@ -180,7 +180,7 @@ import { useStore } from '/@/store/global.js'
         await receiveAnswer(data)
         break;
       case 'system':
-        unref(msgScreenRef).setMsgIn({ type, data })
+        if (data) unref(msgScreenRef).setMsgIn({ type, data })
         unref(groupListRef).getGroupList()
         break;
       case 'connect':
@@ -341,6 +341,10 @@ import { useStore } from '/@/store/global.js'
             unref(msgScreenRef).acceptStream()
             createStreamOffer()
             return
+          case 'share-end':
+            unref(systemMessageRef).show('屏幕共享已结束')
+            unref(screenShareRef).clearSource()
+            return 
         }
       }
     } else { // 文件接收

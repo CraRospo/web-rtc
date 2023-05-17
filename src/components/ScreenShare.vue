@@ -57,6 +57,7 @@ const onRecord = () => {
 
 // stream chunk
 const handleDataAvailable = (event) => {
+  console.log(event.data)
   if (event.data.size > 0) {
     recorderChunk.value.push(event.data)
     download()
@@ -83,8 +84,17 @@ defineExpose({
     visible.value = true
   },
 
+  hide() {
+    visible.value = false
+  },
+
   setSource(source) {
     unref(videoRef).srcObject = source
+  },
+
+  clearSource() {
+    unref(videoRef).srcObject = null
+    visible.value = false
   }
 })
 

@@ -65,7 +65,6 @@ import { useStore } from '/@/store/global'
 import { storeToRefs } from 'pinia'
 import fileIcon from '/@/assets/file.svg'
 import desktopIcon from '/@/assets/desktop.svg'
-import SystemMessage from './SystemMessage.vue'
 
 const store = useStore()
 const { dataChannel, fileList, connection, shareStream } = storeToRefs(store)
@@ -118,6 +117,13 @@ const shareScreen = async () => {
     await createStream()
   } catch(err) {
     console.error("Error: " + err)
+  }
+
+  unref(shareStream).getTracks()[0].onended = (e) => {
+    unref(dataChannel).send(JSON.stringify({
+      type: 'action',
+      data: 'share-end'
+    }))
   }
 
   unref(dataChannel).send(JSON.stringify({

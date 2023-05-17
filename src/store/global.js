@@ -17,7 +17,11 @@ export const useStore = defineStore('main', {
 
   actions: {
     async createStream() {
-      this.shareStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+      try {
+        this.shareStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false }) 
+      } catch (error) {
+        console.log(error)
+      }
     },
 
     setTarget(id) {
