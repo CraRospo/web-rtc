@@ -1,6 +1,9 @@
 lockfileVersion: '6.0'
 
 dependencies:
+  crypto-js:
+    specifier: ^4.1.1
+    version: 4.1.1
   pinia:
     specifier: ^2.0.35
     version: 2.0.35(vue@3.2.47)
@@ -335,6 +338,10 @@ packages:
     dependencies:
       is-what: 3.14.1
     dev: true
+
+  /crypto-js@4.1.1:
+    resolution: {integrity: sha512-o2JlM7ydqd3Qk9CA0L4NL6mTzU2sdx96a+oOfPu8Mkl/PK51vSyoi8/rQ8NknZtk44vq15lmhAj9CIAGwgeWKw==}
+    dev: false
 
   /csstype@2.6.21:
     resolution: {integrity: sha512-Z1PhmomIfypOpoMjRQB70jfvy/wxT50qW08YXO5lMIJkrdq4yOTR+AW7FqutScmB9NkLwxo+jU+kZLbofZZq/w==}
