@@ -119,6 +119,7 @@ const shareScreen = async () => {
     console.error("Error: " + err)
   }
 
+  // 监听共享方主动停止推流
   unref(shareStream).getTracks()[0].onended = (e) => {
     unref(dataChannel).send(JSON.stringify({
       type: 'action',
@@ -126,6 +127,7 @@ const shareScreen = async () => {
     }))
   }
 
+  // 共享方手动发起共享请求
   unref(dataChannel).send(JSON.stringify({
     type: 'action',
     data: 'share-req'
@@ -160,12 +162,17 @@ const send = () => {
 }
 
 defineExpose({
+  // 重置 fileRef.files 否则上传相同文件 无法触发change
   resetFileRef() {
     unref(fileEle).value = ''
   },
+
+  // 写入消息
   setMsgIn(info) {
     msgList.value.push(info)
   },
+
+  // 当对方同意共享 向信道中添加流轨道
   acceptStream() {
     unref(shareStream).getTracks().forEach((track) => {
       unref(connection).addTrack(track, unref(shareStream))

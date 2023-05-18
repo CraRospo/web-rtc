@@ -57,7 +57,7 @@ const onRecord = () => {
 
 // stream chunk
 const handleDataAvailable = (event) => {
-  console.log(event.data)
+
   if (event.data.size > 0) {
     recorderChunk.value.push(event.data)
     download()
