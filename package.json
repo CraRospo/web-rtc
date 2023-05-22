@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "crypto-js": "^4.1.1",
     "pinia": "^2.0.35",
     "vue": "^3.2.47"
   },

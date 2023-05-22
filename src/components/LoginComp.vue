@@ -1,8 +1,7 @@
 <script setup>
 import { reactive, ref } from 'vue';
 import LogoUrl from '/@/assets/logo.png'
-// import { digestMessage } from '/@/utils/util'
-import sha256 from 'crypto-js/sha256';
+import { digestMessage } from '/@/utils/util'
 
 const showLogin = ref(true)
 
@@ -67,8 +66,8 @@ const emit = defineEmits(['success'])
 
 const onLogin = async () => {
   if(!checkForm()) return false
-  // const digestHex = await digestMessage(userInfo.password)
-  const digestHex = sha256('123456').toString()
+
+  const digestHex = await digestMessage(userInfo.password)
   const info = {
     username: userInfo.username,
     password: digestHex
