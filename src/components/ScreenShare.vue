@@ -93,8 +93,11 @@ defineExpose({
   },
 
   clearSource() {
-    unref(videoRef).srcObject = null
-    visible.value = false
+    if (unref(visible)) {
+      unref(videoRef).srcObject = null
+      visible.value = false
+      return true
+    }
   }
 })
 

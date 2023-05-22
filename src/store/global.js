@@ -39,7 +39,7 @@ export const useStore = defineStore('main', {
     createWsInstance() {
       const url = import.meta.env.MODE === 'production'
         ? 'wss://nothingtosay.cn:8010'
-        : 'wss://127.0.0.1:8010' 
+        : 'ws://127.0.0.1:8010' 
       this.wsInstance = new WebSocket(url)
     },
 

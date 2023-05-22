@@ -342,8 +342,8 @@ import { useStore } from '/@/store/global.js'
             createStreamOffer()
             return
           case 'share-end':
-            unref(systemMessageRef).show('屏幕共享已结束')
-            unref(screenShareRef).clearSource()
+            const end = unref(screenShareRef).clearSource()
+            if (end) unref(systemMessageRef).show('屏幕共享已结束')
             return 
         }
       }
